@@ -14,6 +14,6 @@ def test_write_read():
 
 
 def test_parse():
-    afile = read_from_file('apartments.html')
-    parsed = parse_source(afile)
+    afile, encoding = read_from_file('apartments.html')
+    parsed = parse_source(afile, encoding)
     assert parsed.find()
