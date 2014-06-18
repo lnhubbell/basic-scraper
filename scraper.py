@@ -39,7 +39,13 @@ def fetch_json_results(**kwargs):
     resp = requests.get(base, params=kwargs)
     resp.raise_for_status()
     return resp.json()
-# write_to_file('apartments.html', fetch_search_results("", 300)[0])
+
+
+def fetch_json_results_for_write(**kwargs):
+    base = 'http://seattle.craigslist.org/jsonsearch/apa'
+    resp = requests.get(base, params=kwargs)
+    resp.raise_for_status()
+    return resp.content
 
 
 def parse_source(html, the_encoding='utf-8'):
@@ -111,3 +117,7 @@ if __name__ == '__main__':
         if (add_location(listing, search)):
             listing = add_address(listing)
             pprint.pprint(listing)
+
+
+# if __name__ == '__main__':
+#     write_to_file('apartments.html', fetch_json_results_for_write(minAsk=500, maxAsk=1000, bedrooms=2))
