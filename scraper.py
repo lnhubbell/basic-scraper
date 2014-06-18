@@ -1,6 +1,7 @@
 import requests
 import sys
 from bs4 import BeautifulSoup
+import json
 
 
 def fetch_search_results(
@@ -29,8 +30,15 @@ def read_from_file(the_file):
 
 
 def read_search_results():
-    return read_from_file('apartments.html')
+    with open('apartments.html', 'r') as outfile:
+        return outfile.read(), "utf-8"
 
+
+def fetch_json_results(**kwargs):
+    base = 'http://seattle.craigslist.org/jsonsearch/apa'
+    resp = requests.get(base, params=kwargs)
+    resp.raise_for_status()
+    return resp.json()
 # write_to_file('apartments.html', fetch_search_results("", 300)[0])
 
 
@@ -47,6 +55,7 @@ def extract_listings(parsed):
         link = listing.find('span', class_='pl').find('a')
         price_span = listing.find('span', class_='price')
         this_listing = {
+            'pid': listing.attrs.get('data-pid', ''),
             'link': link.attrs['href'],
             'description': link.string.strip(),
             'price': price_span.string.strip(),
@@ -56,20 +65,49 @@ def extract_listings(parsed):
     return extracted
 
 
+def add_location(listing, search):
+    """True if listing can be located, False if not"""
+    if listing['pid'] in search:
+        match = search[listing['pid']]
+        listing['location'] = {
+            'data-latitude': match.get('Latitude', ''),
+            'data-longitude': match.get('Longitude', ''),
+        }
+        return True
+    return False
 
 
-
+def add_address(listing):
+    api_url = 'http://maps.googleapis.com/maps/api/geocode/json'
+    loc = listing['location']
+    latlng_tmpl = "{data-latitude},{data-longitude}"
+    parameters = {
+        'sensor': 'false',
+        'latlng': latlng_tmpl.format(**loc),
+    }
+    resp = requests.get(api_url, params=parameters)
+    resp.raise_for_status()  # <- this is a no-op if all is well
+    data = resp.json()
+    if data['status'] == 'OK':
+        best = data['results'][0]
+        listing['address'] = best['formatted_address']
+    else:
+        listing['address'] = 'unavailable'
+    return listing
 
 
 if __name__ == '__main__':
+    import pprint
     if len(sys.argv) > 1 and sys.argv[1] == 'test':
         html, encoding = read_search_results()
     else:
         html, encoding = fetch_search_results(
-            minAsk=5#, maxAsk=10000
+            minAsk=500, maxAsk=1000, bedrooms=2
         )
-    print encoding
     doc = parse_source(html, encoding)
-    listings = extract_listings(doc)
-    print len(listings)
-    print listings[5]
+    json_res = fetch_json_results(minAsk=500, maxAsk=1000, bedrooms=2)
+    search = {j['PostingID']:j for j in json_res[0]}
+    for listing in extract_listings(doc):
+        if (add_location(listing, search)):
+            listing = add_address(listing)
+            pprint.pprint(listing)
